@@ -65,6 +65,8 @@ sequenceDiagram
         alt éxito
             Sp-->>D: 204
             D-->>S: 200 {"status":"ok"}
+        else token revocado (refresh rechazado)
+            D-->>S: 401 (y queda en daemon.log)
         else 404 (sin dispositivo activo)
             D-->>S: 409
         else otro error de Spotify

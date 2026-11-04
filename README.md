@@ -33,7 +33,7 @@ Botón Stream Deck  →  script delgado (scripts/*.py)  →  daemon local (daemo
 ## 1. Instalar dependencias
 
 ```bash
-cd spotify-streamdeck-daemon
+cd SDPotify
 python -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
@@ -56,6 +56,20 @@ Edita `.env` y llena:
   usaste para el MCP (o crea una app nueva en el
   [dashboard de Spotify](https://developer.spotify.com/dashboard))
 - `DAEMON_TOKEN` — el valor que acabas de generar
+
+En el [dashboard de Spotify](https://developer.spotify.com/dashboard), dentro
+de tu app, agrega este **Redirect URI** exactamente así (si no, el login del
+paso 4 falla con "Invalid redirect URI"):
+
+```
+http://127.0.0.1:8080/callback
+```
+
+Variables opcionales en `.env` (ya vienen en `.env.example`):
+- `SPOTIFY_REDIRECT_URI` — si cambias el valor por defecto, debe coincidir con
+  el registrado en el dashboard.
+- `SPOTIFY_CACHE_PATH` — dónde se guarda el token. Si es relativa, se resuelve
+  contra la carpeta del proyecto.
 
 ## 3. Configurar el token en los scripts
 
@@ -104,8 +118,10 @@ Para que no tengas que abrir una terminal cada vez:
 1. Abre el Programador de tareas → Crear tarea básica
 2. Desencadenador: "Al iniciar sesión"
 3. Acción: iniciar un programa →
-   `C:\ruta\a\spotify-streamdeck-daemon\venv\Scripts\python.exe`
-   con argumentos: `C:\ruta\a\spotify-streamdeck-daemon\run.py`
+   `C:\ruta\a\SDPotify\venv\Scripts\python.exe`
+   con argumentos: `C:\ruta\a\SDPotify\run.py`
+   (**sin** `--login`: con ese flag el arranque abriría el navegador; el
+   login se hace una sola vez a mano, ver paso 4)
 
 **macOS (launchd):** crea un `.plist` en `~/Library/LaunchAgents/` que
 ejecute el mismo `python run.py` con `RunAtLoad` en `true`.
@@ -120,9 +136,9 @@ ejecute el mismo `python run.py` con `RunAtLoad` en `true`.
 Para cada botón:
 1. Arrastra la acción **System → Open**
 2. En "App / File", selecciona el Python del venv:
-   `.../spotify-streamdeck-daemon/venv/bin/python` (o `python.exe` en Windows)
+   `.../SDPotify/venv/bin/python` (o `python.exe` en Windows)
 3. En los argumentos, apunta al script correspondiente, ej.:
-   `.../spotify-streamdeck-daemon/scripts/next.py`
+   `.../SDPotify/scripts/next.py`
 
 Repite para `play.py`, `pause.py`, `previous.py`, y duplica `volume_40.py`
 si quieres botones de volumen a niveles específicos.
@@ -141,6 +157,16 @@ si quieres botones de volumen a niveles específicos.
 
 Todos excepto `/health` requieren el header `X-Daemon-Token`.
 
+Códigos de error:
+
+| Código | Significado |
+|---|---|
+| 400 | `level` fuera de 0-100 en `/volume` |
+| 401 | El token de Spotify es inválido o fue revocado: ejecuta `python run.py --login` |
+| 403 | Falta `X-Daemon-Token` o es incorrecto |
+| 409 | No hay ningún dispositivo Spotify activo |
+| 502 | Error de la Web API de Spotify |
+
 ## Logs
 
 El daemon escribe en `daemon.log` (en la carpeta del proyecto, con rotación:
@@ -155,11 +181,15 @@ Si Spotify revoca el token con el daemon ya en marcha, los endpoints responden
 
 ## Notas
 
-- Necesitas Spotify abierto y activo en algún dispositivo (ver conversación
-  anterior sobre "dispositivo activo" de Spotify Connect) para que los
-  comandos de reproducción funcionen.
+- Necesitas Spotify abierto y activo en algún dispositivo (Spotify Connect
+  llama a esto "dispositivo activo"): abre Spotify y dale play/pausa una vez.
+  Si no, los comandos devuelven 409.
+- Los comandos de reproducción y volumen requieren **Spotify Premium**.
 - Este daemon comparte la misma cuenta y lógica de autenticación que el MCP
   de Spotify — si ya autorizaste uno, puedes copiar el
   `.spotify_token_cache` en vez de volver a autorizar, siempre que uses el
-  mismo `SPOTIFY_CLIENT_ID`/`SECRET`.
+  mismo `SPOTIFY_CLIENT_ID`/`SECRET` **y** el token tenga los mismos scopes
+  (`user-read-playback-state`, `user-modify-playback-state`,
+  `user-read-currently-playing`). Si no, el daemon lo rechaza al arrancar y
+  tendrás que ejecutar `python run.py --login`.
 - No subas `.env` ni `.spotify_token_cache` a ningún repositorio público.
