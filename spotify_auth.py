@@ -9,6 +9,7 @@ del token. La autenticación se resuelve una sola vez al arrancar el daemon
 """
 
 import os
+from pathlib import Path
 
 import spotipy
 from dotenv import load_dotenv
@@ -27,7 +28,13 @@ SCOPES = " ".join(
 CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8080/callback")
-CACHE_PATH = os.getenv("SPOTIFY_CACHE_PATH", ".spotify_token_cache")
+# Las rutas relativas se resuelven contra la carpeta del proyecto, no contra el
+# directorio de trabajo del proceso (que en el Programador de tareas suele ser
+# C:\Windows\System32 y haría perder el token guardado).
+BASE_DIR = Path(__file__).resolve().parent
+CACHE_PATH = str(
+    BASE_DIR / os.getenv("SPOTIFY_CACHE_PATH", ".spotify_token_cache")
+)
 
 _client: spotipy.Spotify | None = None
 

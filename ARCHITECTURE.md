@@ -116,7 +116,7 @@ flowchart TD
 Puntos a tener en cuenta:
 
 - Solo `python run.py --login` puede abrir el navegador. El arranque normal, por ejemplo desde el Programador de tareas, falla con un error claro si falta el token y no se queda esperando.
-- `SPOTIFY_CACHE_PATH` es relativo por defecto, así que depende del directorio de trabajo del proceso.
+- `SPOTIFY_CACHE_PATH` se resuelve contra la carpeta del proyecto si es relativo (o se usa tal cual si es absoluto), por lo que no depende del directorio desde el que se lance el daemon.
 - El `SPOTIFY_REDIRECT_URI` debe coincidir exactamente con el registrado en el dashboard de Spotify.
 - Scopes solicitados: `user-read-playback-state`, `user-modify-playback-state`, `user-read-currently-playing`.
 
