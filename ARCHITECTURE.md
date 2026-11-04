@@ -120,6 +120,12 @@ Puntos a tener en cuenta:
 - El `SPOTIFY_REDIRECT_URI` debe coincidir exactamente con el registrado en el dashboard de Spotify.
 - Scopes solicitados: `user-read-playback-state`, `user-modify-playback-state`, `user-read-currently-playing`.
 
+## Logs y errores de autenticación en ejecución
+
+`run.py` configura el logging de uvicorn y añade un archivo rotativo `daemon.log` (1 MB, 3 copias) donde también escribe el logger `daemon`. Se registran: fallos de autenticación al arrancar, requests con token inválido (403), 409 por falta de dispositivo activo y errores de la Web API (502).
+
+Si Spotify rechaza el token mientras el daemon ya corre (por ejemplo, lo revocaste), el refresh falla con `SpotifyOauthError`. Un handler global lo registra en el log y responde 401 con la instrucción de ejecutar `python run.py --login`. El daemon no se recupera solo: hay que reautorizar y reiniciarlo.
+
 ## Endpoints
 
 | Endpoint | Método | Llamada spotipy | Notas |
@@ -132,7 +138,7 @@ Puntos a tener en cuenta:
 | `/volume?level=N` | POST | `volume(N)` | `N` entre 0 y 100, si no responde 400. |
 | `/now-playing` | GET | `current_playback()` | Devuelve pista, artistas y progreso. No traduce errores de Spotify. |
 
-Mapeo de errores en los endpoints de acción: `SpotifyException` con 404 pasa a HTTP 409 (sin dispositivo activo) y cualquier otra pasa a HTTP 502.
+Mapeo de errores en los endpoints de acción: `SpotifyException` con 404 pasa a HTTP 409 (sin dispositivo activo) y cualquier otra pasa a HTTP 502. Un token revocado (`SpotifyOauthError`) pasa a HTTP 401.
 
 ## Cómo añadir una acción nueva
 

@@ -1,6 +1,7 @@
 # Secretos y estado local
 .env
 .spotify_token_cache
+daemon.log*
 
 # Python
 venv/

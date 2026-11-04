@@ -141,6 +141,18 @@ si quieres botones de volumen a niveles específicos.
 
 Todos excepto `/health` requieren el header `X-Daemon-Token`.
 
+## Logs
+
+El daemon escribe en `daemon.log` (en la carpeta del proyecto, con rotación:
+1 MB x 3 archivos), además de la consola. Es lo primero que conviene revisar
+cuando un botón deja de funcionar, sobre todo si el daemon corre desde el
+Programador de tareas. Registra los errores de autenticación al arrancar, los
+requests rechazados por token, los 409 (sin dispositivo activo) y los errores
+de la Web API de Spotify.
+
+Si Spotify revoca el token con el daemon ya en marcha, los endpoints responden
+**401** y el log indica ejecutar `python run.py --login`.
+
 ## Notas
 
 - Necesitas Spotify abierto y activo en algún dispositivo (ver conversación

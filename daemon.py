@@ -18,15 +18,20 @@ Arrancar (siempre con run.py, que autentica antes de levantar el servidor):
     python run.py
 """
 
+import logging
 import os
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from spotipy.exceptions import SpotifyException
+from spotipy.oauth2 import SpotifyOauthError
 
-from spotify_auth import get_spotify_client
+from spotify_auth import AuthError, get_spotify_client
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)  # 'daemon'; run.py lo envía a daemon.log
 
 DAEMON_TOKEN = os.getenv("DAEMON_TOKEN")
 
@@ -39,14 +44,35 @@ if not DAEMON_TOKEN:
 
 app = FastAPI(title="Spotify Stream Deck Daemon")
 
+_REAUTH_MESSAGE = (
+    "El token de Spotify es inválido o fue revocado. Detén el daemon y "
+    "ejecuta: python run.py --login"
+)
+
+
+@app.exception_handler(SpotifyOauthError)
+@app.exception_handler(AuthError)
+def auth_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Token revocado/inválido con el daemon ya en marcha: lo deja en el log
+    con instrucciones y responde 401 en vez de un 500 genérico."""
+    logger.error("%s %s -> %s | detalle: %s", request.method, request.url.path, _REAUTH_MESSAGE, exc)
+    return JSONResponse(status_code=401, content={"detail": _REAUTH_MESSAGE})
+
 
 def verify_token(x_daemon_token: str = Header(default=None)) -> None:
     """Dependencia de FastAPI: valida el token compartido en cada request."""
     if x_daemon_token != DAEMON_TOKEN:
+        logger.warning("Request rechazado: X-Daemon-Token inválido o ausente.")
         raise HTTPException(status_code=403, detail="Token inválido o ausente.")
 
 
+def _upstream_error(e: SpotifyException) -> HTTPException:
+    logger.error("Error de la Web API de Spotify (HTTP %s): %s", e.http_status, e)
+    return HTTPException(status_code=502, detail=str(e))
+
+
 def _no_active_device_error() -> HTTPException:
+    logger.warning("Spotify respondió 404: no hay ningún dispositivo activo.")
     return HTTPException(
         status_code=409,
         detail=(
@@ -72,7 +98,7 @@ def play_action() -> dict:
     except SpotifyException as e:
         if e.http_status == 404:
             raise _no_active_device_error()
-        raise HTTPException(status_code=502, detail=str(e))
+        raise _upstream_error(e)
 
 
 @app.post("/pause", dependencies=[Depends(verify_token)])
@@ -84,7 +110,7 @@ def pause_action() -> dict:
     except SpotifyException as e:
         if e.http_status == 404:
             raise _no_active_device_error()
-        raise HTTPException(status_code=502, detail=str(e))
+        raise _upstream_error(e)
 
 
 @app.post("/next", dependencies=[Depends(verify_token)])
@@ -96,7 +122,7 @@ def next_action() -> dict:
     except SpotifyException as e:
         if e.http_status == 404:
             raise _no_active_device_error()
-        raise HTTPException(status_code=502, detail=str(e))
+        raise _upstream_error(e)
 
 
 @app.post("/previous", dependencies=[Depends(verify_token)])
@@ -108,7 +134,7 @@ def previous_action() -> dict:
     except SpotifyException as e:
         if e.http_status == 404:
             raise _no_active_device_error()
-        raise HTTPException(status_code=502, detail=str(e))
+        raise _upstream_error(e)
 
 
 @app.post("/volume", dependencies=[Depends(verify_token)])
@@ -124,7 +150,7 @@ def volume_action(level: int) -> dict:
     except SpotifyException as e:
         if e.http_status == 404:
             raise _no_active_device_error()
-        raise HTTPException(status_code=502, detail=str(e))
+        raise _upstream_error(e)
 
 
 @app.get("/now-playing", dependencies=[Depends(verify_token)])
