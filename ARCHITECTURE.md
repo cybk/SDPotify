@@ -21,9 +21,9 @@ flowchart LR
 
 | Archivo | Rol |
 |---|---|
-| `run.py` | Punto de entrada. Lanza uvicorn con `host="127.0.0.1"` fijo. |
+| `run.py` | Punto de entrada. Autentica con Spotify (`--login` para la primera vez) y lanza uvicorn con `host="127.0.0.1"` fijo. |
 | `daemon.py` | App FastAPI. Define los endpoints y valida el token. |
-| `spotify_auth.py` | Único lugar que crea el `SpotifyOAuth` y mantiene el cliente spotipy en memoria. |
+| `spotify_auth.py` | Único lugar que crea el `SpotifyOAuth`. `ensure_authenticated()` deja listo el cliente spotipy al arrancar y `get_spotify_client()` lo devuelve. |
 | `scripts/_config.py` | URL del daemon, lectura de `DAEMON_TOKEN` y cabeceras comunes. |
 | `scripts/play.py`, `pause.py`, `next.py`, `previous.py` | Un POST sin parámetros cada uno. |
 | `scripts/volume_40.py` | POST con `?level=N`. Plantilla para botones de volumen. |
@@ -97,24 +97,25 @@ flowchart LR
 
 ## Autenticación con Spotify
 
-Se usa el flujo Authorization Code de `SpotifyOAuth`. El cliente se crea de forma perezosa, en la primera llamada a `get_spotify_client()`, y se reutiliza después.
+Se usa el flujo Authorization Code de `SpotifyOAuth`. La autenticación se resuelve **una sola vez al arrancar**, en `run.py`, antes de levantar uvicorn. Los requests solo reutilizan el cliente ya creado.
 
 ```mermaid
 flowchart TD
-    Start["Primera llamada a get_spotify_client()"] --> Mk["Crea SpotifyOAuth + spotipy.Spotify<br/>(se guarda en _client)"]
-    Mk --> Call["Primera llamada a la API"]
-    Call --> Cache{"¿Token en<br/>.spotify_token_cache?"}
-    Cache -- "Sí, vigente" --> Use["Usa el access token"]
+    Run["python run.py [--login]"] --> Ens["ensure_authenticated(login)"]
+    Ens --> Cache{"¿Token válido en<br/>.spotify_token_cache?"}
+    Cache -- "Sí, vigente" --> Ok["Crea el cliente spotipy"]
     Cache -- "Sí, vencido" --> Ref["Refresca con el refresh token<br/>y actualiza la caché"]
-    Cache -- "No" --> Br["Abre el navegador, el usuario autoriza,<br/>spotipy captura el código en 127.0.0.1:8080"]
-    Br --> Save["Guarda tokens en la caché"]
-    Ref --> Use
-    Save --> Use
+    Ref --> Ok
+    Cache -- "No" --> L{"¿Se pasó --login?"}
+    L -- "Sí" --> Br["Abre el navegador, el usuario autoriza,<br/>spotipy captura el código en 127.0.0.1:8080"]
+    Br --> Save["Guarda tokens en la caché"] --> Ok
+    L -- "No" --> Err["AuthError: indica ejecutar<br/>python run.py --login<br/>y sale con código 1"]
+    Ok --> Srv["Arranca uvicorn en 127.0.0.1:5111"]
 ```
 
 Puntos a tener en cuenta:
 
-- La autorización interactiva ocurre en el primer uso, no al arrancar el daemon. Por eso el README indica autorizar una vez a mano antes de dejarlo como servicio.
+- Solo `python run.py --login` puede abrir el navegador. El arranque normal, por ejemplo desde el Programador de tareas, falla con un error claro si falta el token y no se queda esperando.
 - `SPOTIFY_CACHE_PATH` es relativo por defecto, así que depende del directorio de trabajo del proceso.
 - El `SPOTIFY_REDIRECT_URI` debe coincidir exactamente con el registrado en el dashboard de Spotify.
 - Scopes solicitados: `user-read-playback-state`, `user-modify-playback-state`, `user-read-currently-playing`.

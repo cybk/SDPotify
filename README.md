@@ -73,15 +73,20 @@ respeta las variables de entorno de usuario al ejecutar procesos.)
 
 ## 4. Primera autenticación
 
-Arranca el daemon una vez manualmente para autorizar la app:
+Arranca el daemon una vez manualmente con `--login` para autorizar la app:
 
 ```bash
-python run.py
+python run.py --login
 ```
 
 Se abrirá el navegador pidiéndote autorizar el acceso a tu cuenta de
 Spotify — acéptalo. Esto pasa **una sola vez**; el token queda guardado en
 `.spotify_token_cache` y se refresca solo después.
+
+El arranque normal (`python run.py`, sin `--login`) **nunca abre el
+navegador**: si no encuentra un token válido, termina con un error que te
+indica ejecutar `python run.py --login`. Así una tarea en segundo plano no se
+quede colgada esperando un login.
 
 Prueba que responde:
 

@@ -13,8 +13,9 @@ Seguridad:
 - Sin CORS habilitado -> ninguna página web puede pegarle a este daemon
   desde JavaScript, con o sin token.
 
-Arrancar:
-    uvicorn daemon:app --host 127.0.0.1 --port 5111
+Arrancar (siempre con run.py, que autentica antes de levantar el servidor):
+    python run.py --login   # primera vez
+    python run.py
 """
 
 import os
